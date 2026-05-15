@@ -5,6 +5,10 @@ import { ZodError } from 'zod';
 import { AppError } from './errors/index.js';
 import { validate } from './plugins/zod-validator.js';
 import { createTaskSchema, taskParamsSchema, taskQuerySchema, updateTaskSchema } from './schemas/task.schema.js';
+import { createTaskRepository } from './tasks/task.repository.js';
+import { createTaskService } from './tasks/task.service.js';
+import { createTaskController } from './tasks/task.controller.js';
+import { registerTaskRoutes } from './tasks/task.routes.js';
 
 const fastify = Fastify({
     logger: {
@@ -33,88 +37,10 @@ fastify.setErrorHandler((error, request, reply) => {
     return reply.status(500).send({ error: 'Internal Server Error' });
 });
 
-// ---- Данные (хранилище) ----
-const tasks = new Map();
-let idCounter = 1;
-
-// ---- Хелперы ----
-function generateId() {
-    return String(idCounter++);
-}
-
-function findById(id) {
-    return tasks.get(id) || null;
-}
-
-// ---- POST /api/tasks ----
-fastify.post("/api/tasks", {
-    preHandler: [validate({ body: createTaskSchema })],
-}, async (request, reply) => {
-    const { title, description, priority } = request.body || {};
-
-    const now = new Date().toISOString();
-    const task = {
-        id: generateId(),
-        title,
-        description: description || undefined,
-        status: 'todo',
-        priority: taskPriority,
-        createdAt: now,
-        updatedAt: now,
-    };
-    tasks.set(task.id, task);
-
-    return reply.status(201).send(task);
-});
-
-// ---- GET /api/tasks ----
-fastify.get('/api/tasks', {
-    preHandler: [validate({ query: taskQuerySchema })],
-}, async (request, reply) => {
-    const { status, priority, page = '1', limit = '20' } = request.query || {};
-
-    return reply.send({ items, total: result.length, page: p, limit: l });
-});
-
-// ---- GET /api/tasks/:id ----
-fastify.get('/api/tasks/:id', {
-    preHandler: [validate({ params: taskParamsSchema })],
-}, async (request, reply) => {
-    const { id } = request.params;
-    const task = findById(id);
-    if (!task) {
-        return reply.status(404).send({ error: 'Task not found' });
-    }
-    return reply.send(task);
-});
-
-// ---- PATCH /api/tasks/:id ----
-fastify.patch('/api/tasks/:id', {
-    preHandler: [validate({ params: taskParamsSchema, body: updateTaskSchema })]
-}, async (request, reply) => {
-    const { id } = request.params;
-    const task = findById(id);
-    if (!task) {
-        return reply.status(404).send({ error: 'Task not found' });
-    }
-
-    const { title, description, status, priority } = request.body || {};
-
-    task.updatedAt = new Date().toISOString();
-
-    return reply.send(task);
-});
-
-// ---- DELETE /api/tasks/:id ----
-fastify.delete('/api/tasks/:id', {
-    preHandler: [validate({ params: taskParamsSchema })]
-}, async (request, reply) => {
-    const { id } = request.params;
-    if (!tasks.delete(id)) {
-        return reply.status(404).send({ error: 'Task not found' });
-    }
-    return reply.status(204).send();
-});
+const taskRepository = createTaskRepository();
+const taskService = createTaskService({ taskRepository });
+const taskController = createTaskController({ taskService });
+registerTaskRoutes(fastify, taskController);
 
 // ---- Запуск ----
 const port = Number(process.env.PORT) || 3000;
