@@ -9,6 +9,7 @@ import { createTaskRepository } from './tasks/task.repository.js';
 import { createTaskService } from './tasks/task.service.js';
 import { createTaskController } from './tasks/task.controller.js';
 import { registerTaskRoutes } from './tasks/task.routes.js';
+import { createTaskFileRepository } from './tasks/task.repository.file.js';
 
 const fastify = Fastify({
     logger: {
@@ -37,7 +38,13 @@ fastify.setErrorHandler((error, request, reply) => {
     return reply.status(500).send({ error: 'Internal Server Error' });
 });
 
-const taskRepository = createTaskRepository();
+const STORAGE_TYPE = process.env.STORAGE_TYPE || 'memory';
+
+const taskRepository = STORAGE_TYPE === 'file'
+    ? createTaskFileRepository({ filePath: './data/tasks.json' })
+    : createTaskRepository();
+
+// const taskRepository = createTaskRepository();
 const taskService = createTaskService({ taskRepository });
 const taskController = createTaskController({ taskService });
 registerTaskRoutes(fastify, taskController);
